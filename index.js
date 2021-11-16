@@ -45,6 +45,7 @@ async function run(){
         const productsCollection = database.collection('porducts');
         const usersCollection = database.collection('users');
         const orderCollection = database.collection('orders');
+        const reviewsCollection = database.collection('reviews');
 
         // PRODUCTS AREA begins ******************************************
         // get all products
@@ -63,12 +64,11 @@ async function run(){
         })
         // PRODUCTS AREA ends******************************************
         
-        // tt
+
         // order area begins *****************************************
         // insert single product
         app.post('/order', async(req, res) => {
           const product = req.body;
-          console.log('order', product)
           const result = await orderCollection.insertOne(product);
           res.json(result)
         })
@@ -78,18 +78,57 @@ async function run(){
           const results = await cursor.toArray();
           res.json(results);
         });
+
+        // get all order by customer
+        app.get('/order/:email', async (req, res) => {
+          const email = req.params.email;
+            const query = {email: email}
+          const cursor = orderCollection.find(query);
+          const results = await cursor.toArray();
+          res.json(results);
+        });
+
+        // update order status
+        app.put('/order/:id', async(req, res) =>{
+            const id = req.params.id;
+            // const updatedUser = req.body;
+            const filter = {_id: mongoObjId(id)}
+            const options = {upsert: true}
+            const updateDoc = {
+                $set:{
+                    status: 'Shipped'
+                }
+            }
+            const result = await orderCollection.updateOne(filter, updateDoc, options)
+            res.json(result)
+        })
         
         // delete order ******************************
         app.delete('/order/:id', async(req, res)=>{
             const id = req.params.id;
-            console.log('hitting delete for id', id)
             const query = {_id: mongoObjId(id)}
-            console.log('query', query)
             const result = await orderCollection.deleteOne(query)
             res.json(result)
         })
         // order area ends ********************************************
 
+
+        // review area begins *****************************************
+        // insert reviw
+        app.post('/review', async(req, res) => {
+          const review = req.body;
+          console.log(review)
+          const result = await reviewsCollection.insertOne(review);
+          res.json(result)
+        })
+
+        // get all reviews
+        app.get('/reviews', async (req, res) => {
+          const cursor = reviewsCollection.find({});
+          const results = await cursor.toArray();
+          res.json(results);
+        });
+        // review area ends *****************************************
 
         // user area begins ********************************************
         // register user
