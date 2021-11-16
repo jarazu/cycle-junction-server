@@ -3,75 +3,96 @@ const app = express()
 const port = process.env.PORT || 5000
 const cors = require('cors')
 require('dotenv').config()
+const mongoObjId = require('mongodb').ObjectId
+
 const { MongoClient } = require('mongodb');
 
-// cyclejunction
-// T0UBgjAkTs7x7Rex
-
+// mongo db connection ******************************
 const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster0.v21cd.mongodb.net/myFirstDatabase?retryWrites=true&w=majority`;
 const client = new MongoClient(uri, { useNewUrlParser: true, useUnifiedTopology: true });
 app.use(cors());
 app.use(express.json());
 
 
-// // firebase auth starts ***************************
-// var admin = require("firebase-admin");
-
-// // var serviceAccount = require("./doctors-portal-8e4f6-firebase-adminsdk-j0tga-3792fc418b.json");
-// var serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
-// admin.initializeApp({
-//   credential: admin.credential.cert(serviceAccount)
-// });
-// // firebase auth end ****************************************
+// firebase auth starts ***************************
+var admin = require("firebase-admin");
+var serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
+admin.initializeApp({
+  credential: admin.credential.cert(serviceAccount)
+});
+// firebase auth end ****************************************
 
 
-
-// async function verifyToken(req, res, next){
-//   if(req.headers?.authorization?.startsWith('Bearer ')){
-//     const token = req.headers.authorization.split(' ')[1];
-//     try {
-//       const decodedUser = await admin.auth().verifyIdToken(token);
-//       req.decodedEmail = decodedUser.email;
-//     } catch (error) {
+// verify jwt token *****************************************
+async function verifyToken(req, res, next){
+  if(req.headers?.authorization?.startsWith('Bearer ')){
+    const token = req.headers.authorization.split(' ')[1];
+    try {
+      const decodedUser = await admin.auth().verifyIdToken(token);
+      req.decodedEmail = decodedUser.email;
+    } catch (error) {
       
-//     }
-//   }
-//   next();
-// }
+    }
+  }
+  next();
+}
 
+// rest api implement *******************************
 async function run(){
     try{
         await client.connect();
-        const database = client.db('doctors_portal');
-        const appointmentsCollection = database.collection('appointments');
+        const database = client.db('cycle_junction');
+        const productsCollection = database.collection('porducts');
         const usersCollection = database.collection('users');
+        const orderCollection = database.collection('orders');
 
-        app.get('/appointments', async (req, res) => {
-          const email = req.query.email;
-          const date = req.query.date;
-          const query = {email: email, date: date}
-          const cursor = appointmentsCollection.find(query);
-          const appointments = await cursor.toArray();
-          res.json(appointments);
+        // PRODUCTS AREA begins ******************************************
+        // get all products
+        app.get('/products/:limit', async (req, res) => {
+          const limit = Number(req.params.limit);
+          const cursor = productsCollection.find({}).limit(limit);
+          const results = await cursor.toArray();
+          res.json(results);
         });
 
-        // app.get('/users/:email', async(req, res) =>{
-        //   const email = req.params.email;
-        //   const query = {email};
-        //   const user = await usersCollection.findOne(query);
-        //   let isAdmin = false;
-        //   if (user?.role === 'admin') {
-        //     isAdmin = true;
-        //   }
-        //   res.json({admin: isAdmin});
-        // })
-
-        app.post('/appointments', async(req, res) => {
-          const appointment = req.body;
-          const result = await appointmentsCollection.insertOne(appointment);
+        // insert single product
+        app.post('/products', async(req, res) => {
+          const product = req.body;
+          const result = await productsCollection.insertOne(product);
           res.json(result)
         })
+        // PRODUCTS AREA ends******************************************
         
+
+        // order area begins *****************************************
+        // insert single product
+        app.post('/order', async(req, res) => {
+          const product = req.body;
+          console.log('order', product)
+          const result = await orderCollection.insertOne(product);
+          res.json(result)
+        })
+        // get all order
+        app.get('/order', async (req, res) => {
+          const cursor = orderCollection.find({});
+          const results = await cursor.toArray();
+          res.json(results);
+        });
+        
+        // delete order ******************************
+        app.delete('/order/:id', async(req, res)=>{
+            const id = req.params.id;
+            console.log('hitting delete for id', id)
+            const query = {_id: mongoObjId(id)}
+            console.log('query', query)
+            const result = await orderCollection.deleteOne(query)
+            res.json(result)
+        })
+        // order area ends ********************************************
+
+
+        // user area begins ********************************************
+        // register user
         app.post('/users', async(req, res) => {
           const users = req.body;
           const result = await usersCollection.insertOne(users);
@@ -87,22 +108,37 @@ async function run(){
           res.json('put response',result);
         })
 
-        // app.put('/users/admin', async(req, res) =>{
-        //   const useremail = req.body;
-        //   const requesterEmail = req.decodedEmail;
-        //   if (requesterEmail) {
-        //     const requesterAccount = await usersCollection.findOne({email: requesterEmail});
-        //     if (requesterAccount.role === 'admin') {
-        //       const filter = {email: useremail.email}
-        //       const updateDoc = {$set: {role: 'admin'}}
-        //       const result = await usersCollection.updateOne(filter, updateDoc);
-        //       res.json(result);
-        //     }
-        //   }
-        //   else{
-        //     res.status(401)
-        //   }
-        // })
+        // check if a user is admin or not ***********************
+        app.get('/users/:email', async(req, res) =>{
+          const email = req.params.email;
+          const query = {email};
+          const user = await usersCollection.findOne(query);
+          let isAdmin = false;
+          if (user?.role === 'admin') {
+            isAdmin = true;
+          }
+          res.json({admin: isAdmin});
+        })
+
+        // set a user as admin **********************
+        app.put('/users/admin', verifyToken, async(req, res) =>{
+          const useremail = req.body;
+          const requesterEmail = req.decodedEmail;
+          if (requesterEmail) {
+            const requesterAccount = await usersCollection.findOne({email: requesterEmail});
+            if (requesterAccount.role === 'admin') {
+              const filter = {email: useremail.email}
+              const updateDoc = {$set: {role: 'admin'}}
+              const result = await usersCollection.updateOne(filter, updateDoc);
+            // console.log('result',result)
+              res.json(result);
+            }
+          }
+          else{
+            res.status(401)
+          }
+        })
+        // user area ends **************************************************
       }
     finally{
 
@@ -112,7 +148,7 @@ async function run(){
 run().catch(console.dir);
 
 app.get('/', (req, res) => {
-  res.send('Hello doctors portal!')
+  res.send('Hello cycle junction portal!')
   //
 })
 
