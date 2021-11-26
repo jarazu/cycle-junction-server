@@ -7,7 +7,7 @@ const mongoObjId = require('mongodb').ObjectId
 
 const { MongoClient } = require('mongodb');
 
-// mongo db connection ******************************
+// mongo db connection *******************************
 const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster0.v21cd.mongodb.net/myFirstDatabase?retryWrites=true&w=majority`;
 const client = new MongoClient(uri, { useNewUrlParser: true, useUnifiedTopology: true });
 app.use(cors());
